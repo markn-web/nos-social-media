@@ -94,7 +94,11 @@ def src_dvids(q, n):
             credit = clean(credit.get("name"), 80)
         credit = clean(credit, 80)
         branch = clean(r.get("branch"), 40)
-        who = f"U.S. {branch}" if branch and branch.lower() not in ("joint", "civilian", "other") else clean(r.get("unit_name"), 80)
+        names = {"marines": "Marine Corps", "marine corps": "Marine Corps", "army": "Army", "navy": "Navy",
+                 "air force": "Air Force", "coast guard": "Coast Guard", "space force": "Space Force",
+                 "national guard": "National Guard"}
+        b = names.get(branch.lower()) if branch else None
+        who = f"U.S. {b}" if b else (clean(r.get("unit_name"), 80) or "U.S. government")
         thumb = r.get("thumbnail")
         if isinstance(thumb, dict):
             thumb = thumb.get("url")
