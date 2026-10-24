@@ -1,7 +1,7 @@
 # Photo finding for NOS social posts
 
-This repository hosts post photos publicly. It is a PUBLIC repo: never commit API keys, board links,
-notes, or anything other than photos and these tools.
+This repository hosts post photos and PDF documents publicly. It is a PUBLIC repo: never commit API
+keys, board links, notes, or anything other than photos, public PDFs (see "PDF documents") and these tools.
 
 ## Find
 Run with the keys from your instructions as environment variables (never echo or save them):
@@ -39,3 +39,24 @@ is true, the DVIDS line: "The appearance of U.S. Department of War visual inform
 imply or constitute DoW endorsement." NOS's own photos get no credit line.
 When an Unsplash photo is actually published, call its `unsplash_dl` link once with the Unsplash
 key (Authorization: Client-ID <key>), as Unsplash's terms require.
+
+## PDF documents (weekly LinkedIn document post)
+Find one technical PDF that directly supports the post's topic. Allowed: U.S. government works
+(NASA Technical Reports Server with "Public Use Permitted", DTIC "Distribution Statement A: approved for
+public release", NIST, DOE/OSTI, FAA, Navy and Air Force public releases) or documents under CC BY or
+CC BY-SA. Confirm the status on the document's landing page. Never paywalled papers, journal reprints,
+standards sold by their publisher, export-controlled or limited-distribution documents, or company
+brochures and data sheets.
+
+    python3 tools/prepare_pdf.py --src <direct https link to the .pdf> --pages "1-3,6,9-11" \
+      --title "<what LinkedIn shows, under about 60 characters>" \
+      --credit "<publisher>: <document title>" --license "Public domain (U.S. government work)" \
+      --source-url <landing page> --post <post id> --date <post date> \
+      --thumb-url <the post's selected photo url> --out /tmp/pdf --push
+
+Pick the 6 to 10 pages that carry the useful content (summary, key figures, tables, conclusions) and
+skip covers, distribution pages and long reference lists. The record's `mode` is "hosted" (cut, hosted
+here with a page-one cover, `preview` to upload to the board) or "direct" (this session can't reach
+the PDF's host; LinkedIn shows the whole document, so only use it when the landing page shows 60 pages
+or fewer). The publishing run credits it under the post: "Document: <credit> (<license>)."
+
