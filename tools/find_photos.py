@@ -28,7 +28,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 UA = "NOS-Social-Photo-Finder/1.0 (markn@nosmanufacturing.com)"
 TIMEOUT = 25
 SITE = "https://nosmanufacturing.com"
-SITE_PAGES = ["/", "/how-we-work.html", "/work.html", "/about.html"]
+SITE_PAGES = ["/", "/how-we-work", "/work", "/reverse-engineering", "/about"]
 DOW_LINE = ("The appearance of U.S. Department of War visual information does not imply "
             "or constitute DoW endorsement.")
 OK_CC = re.compile(r"^(cc0|pdm|public domain|pd\b|pd-|cc[- ]by(-sa)?[- ]?\d|cc[- ]by(-sa)?$|by(-sa)?$)", re.I)
