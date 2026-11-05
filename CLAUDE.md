@@ -13,6 +13,21 @@ Queries describe what should be IN the photo (a part, a machine, a process, a se
 post's message: "cnc lathe cutting steel", "industrial pipeline valve", "metal 3d printer build plate".
 Then Read /tmp/ph/sheet.jpg and look at every numbered candidate.
 
+## NOS photos first
+`find_photos.py` always searches nosmanufacturing.com (home, How We Work, Work, Reverse Engineering
+and About pages) as source "website". The Work page carries every one of Mark's project collages
+(scan, CAD, CFD or FEA, printed and finished part together), so for work, explainer and reverse
+engineering posts a website photo should usually be option 1.
+- Never crop or split a multi-photo collage. `prepare_photo.py` only scales and pads (to 4:5 or
+  1.91:1 with a plain background), so pass collages to it as they are and never cut one yourself.
+- Mark's full-size originals live in his Google Drive folder "Project Photos" (inside "Website Assets
+  - Drop Files Here"). New project photos land there before they reach the website. If your session
+  has Google Drive tools, list that folder by name only (search_files with excludeContentSnippets);
+  never download images through the Drive tool (it returns the whole file as base64, far too large).
+  If a photo there fits a post clearly better than anything on the website, say so in one line of the
+  board note you write ("New project photo in Drive fits <topic>: <file name>. Upload it on the post to
+  use it."), so Mark can upload it on the board.
+
 ## Choose 3
 Rank the best three for the post. Keep a photo only if all of these hold:
 - It clearly shows the subject or a close, honest stand-in. Real industrial photos over renders.
