@@ -2,10 +2,17 @@
 """Search free photo libraries for one social post and build a numbered contact sheet.
 
 Usage:
-  python3 tools/find_photos.py --query "cnc machining" --query "metal lathe" --out /tmp/ph
+  python3 tools/find_photos.py --query "cnc machining" --query "metal lathe" \
+      --exclude /tmp/used.json --out /tmp/ph
 
 Keys are read from the environment and never written anywhere:
   UNSPLASH_KEY, PIXABAY_KEY, DVIDS_KEY   (a source without its key is skipped)
+
+--exclude takes the list tools/used_photos.py builds from the board; photos on it never reach the
+contact sheet, so every run offers fresh photos.
+
+NOS photos ("website") come from the live site pages plus tools/nos_photos.json, the list of NOS work
+photos hosted on nosmanufacturing.com that are not on those pages.
 
 Writes:
   OUT/candidates.json   every candidate with source, credit, license and links
@@ -25,10 +32,11 @@ import urllib.request
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
-UA = "NOS-Social-Photo-Finder/1.0 (markn@nosmanufacturing.com)"
+UA = "NOS-Social-Photo-Finder/1.1 (+https://nosmanufacturing.com)"
 TIMEOUT = 25
 SITE = "https://nosmanufacturing.com"
 SITE_PAGES = ["/", "/how-we-work", "/work", "/reverse-engineering", "/about"]
+LIBRARY = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nos_photos.json")
 DOW_LINE = ("The appearance of U.S. Department of War visual information does not imply "
             "or constitute DoW endorsement.")
 OK_CC = re.compile(r"^(cc0|pdm|public domain|pd\b|pd-|cc[- ]by(-sa)?[- ]?\d|cc[- ]by(-sa)?$|by(-sa)?$)", re.I)
@@ -51,6 +59,41 @@ def words(q):
     return [w for w in re.findall(r"[a-z0-9]+", q.lower()) if len(w) > 2]
 
 
+# ---------- photo identity (shared with prepare_photo.py and used_photos.py) ----------
+
+def norm(s):
+    s = str(s or "").strip()
+    if s.lower().startswith("http"):
+        s = urllib.parse.unquote(s.split("#")[0].split("?")[0]).rstrip("/")
+    return re.sub(r"\s+", " ", s).strip().lower()
+
+
+def photo_key(c):
+    """One stable id per photo: the image file (without extension) for NOS photos, the photo's own page otherwise."""
+    if c.get("source") == "website":
+        stem = norm(c.get("full_url") or c.get("url")).rsplit("/", 1)[-1]
+        return "nos:" + re.sub(r"\.(jpe?g|png|webp)$", "", stem)
+    return norm(c.get("page_url") or c.get("full_url"))
+
+
+def ids(c):
+    out = {photo_key(c), norm(c.get("full_url")), norm(c.get("preview_url"))}
+    if c.get("source") == "website":
+        out.add("nos-title:" + norm(c.get("title")))
+    out.discard("")
+    out.discard("nos:")
+    out.discard("nos-title:")
+    return out
+
+
+def load_exclude(path):
+    if not path:
+        return set()
+    d = json.load(open(path))
+    items = d.get("keys", []) if isinstance(d, dict) else d
+    return {norm(x) if not str(x).startswith("nos-title:") else "nos-title:" + norm(str(x)[10:]) for x in items if x}
+
+
 # ---------- sources ----------
 
 def src_website(q, n):
@@ -63,7 +106,7 @@ def src_website(q, n):
             continue
         for tag in re.findall(r"<img[^>]+>", body):
             m = re.search(r'src="([^"]+)"', tag)
-            if not m or "logo" in m.group(1) or not re.search(r"\.(jpe?g|png|webp)", m.group(1), re.I):
+            if not m or "logo" in m.group(1) or "portrait" in m.group(1) or not re.search(r"\.(jpe?g|png|webp)", m.group(1), re.I):
                 continue
             url = urllib.parse.urljoin(SITE + page, m.group(1))
             if url in seen:
@@ -74,6 +117,19 @@ def src_website(q, n):
             out.append(dict(source="website", title=alt or "NOS photo", page_url=SITE + page,
                             preview_url=url, full_url=url, credit="", license="NOS Manufacturing (own photo)",
                             disclaimer=False, hotlink=False, score=score))
+    try:
+        library = json.load(open(LIBRARY))
+    except Exception:
+        library = []
+    for p in library:
+        url = urllib.parse.urljoin(SITE + "/", urllib.parse.quote(p["file"]))
+        if url in seen:
+            continue
+        seen.add(url)
+        text = (p.get("title", "") + " " + " ".join(p.get("tags", []))).lower()
+        out.append(dict(source="website", title=p.get("title") or "NOS photo", page_url=SITE + (p.get("page") or "/work"),
+                        preview_url=url, full_url=url, credit="", license="NOS Manufacturing (own photo)",
+                        disclaimer=False, hotlink=False, score=sum(w in text for w in ws), group=p.get("group", "")))
     out.sort(key=lambda c: -c["score"])
     return out[:n]
 
@@ -261,25 +317,39 @@ def main():
     ap.add_argument("--query", action="append", required=True, help="2 to 4 visual words; repeat for more searches")
     ap.add_argument("--out", required=True)
     ap.add_argument("--per", type=int, default=4, help="results per source per query")
+    ap.add_argument("--nos", type=int, default=6, help="NOS photos on the sheet")
     ap.add_argument("--max", type=int, default=30)
     ap.add_argument("--only", default="", help="comma list of sources to use")
+    ap.add_argument("--exclude", default="", help="JSON list from tools/used_photos.py: photos never to offer again")
     a = ap.parse_args()
     os.makedirs(os.path.join(a.out, "previews"), exist_ok=True)
     only = set(filter(None, a.only.split(",")))
-    found, errors, seen = [], {}, set()
+    exclude = load_exclude(a.exclude)
+    found, errors, seen, skipped = [], {}, set(), 0
     for q in a.query:
         for name, fn in SOURCES:
             if only and name not in only:
                 continue
             if name == "website" and q != a.query[0]:
                 continue
+            want = a.nos if name == "website" else a.per
             try:
-                for c in fn(q, a.per):
+                got = fn(" ".join(a.query), 200) if name == "website" else fn(q, a.per + 4)
+                kept = 0
+                for c in got:
+                    if kept >= want:
+                        break
                     k = c.get("full_url") or c.get("preview_url")
-                    if k and k not in seen:
-                        seen.add(k)
-                        c["query"] = q
-                        found.append(c)
+                    if not k or k in seen:
+                        continue
+                    if ids(c) & exclude:
+                        skipped += 1
+                        continue
+                    seen.add(k)
+                    c["query"] = q
+                    c["key"] = photo_key(c)
+                    found.append(c)
+                    kept += 1
             except Exception as e:
                 errors[f"{name}:{q}"] = str(e)[:160]
     order = {n: i for i, (n, _) in enumerate(SOURCES)}
@@ -302,7 +372,8 @@ def main():
     by = {}
     for c in ok:
         by[c["source"]] = by.get(c["source"], 0) + 1
-    print(json.dumps({"count": len(ok), "by_source": by, "errors": errors, "sheet": os.path.join(a.out, "sheet.jpg")}))
+    print(json.dumps({"count": len(ok), "by_source": by, "excluded_as_used": skipped, "errors": errors,
+                      "sheet": os.path.join(a.out, "sheet.jpg")}))
 
 
 if __name__ == "__main__":

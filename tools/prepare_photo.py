@@ -25,7 +25,7 @@ import urllib.request
 
 from PIL import Image, ImageOps
 
-UA = "NOS-Social-Photo-Finder/1.0 (markn@nosmanufacturing.com)"
+UA = "NOS-Social-Photo-Finder/1.1 (+https://nosmanufacturing.com)"
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW = "https://raw.githubusercontent.com/markn-web/nos-social-media/main/"
 BG = (20, 23, 28)
@@ -74,6 +74,12 @@ def preview(im, path):
 
 def host(im, rel):
     dst = os.path.join(REPO, rel)
+    base, ext = os.path.splitext(rel)
+    n = 2
+    while os.path.exists(dst):  # never overwrite a photo an earlier post may still point to
+        rel = f"{base}-r{n}{ext}"
+        dst = os.path.join(REPO, rel)
+        n += 1
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     im.save(dst, "JPEG", quality=85, optimize=True, progressive=True)
     return RAW + rel
@@ -87,7 +93,7 @@ def push(msg):
     git("add", "photos")
     if not git("status", "--porcelain", "photos").stdout.strip():
         return True
-    git("-c", "user.name=NOS Social", "-c", "user.email=markn@nosmanufacturing.com", "commit", "-m", msg)
+    git("-c", "user.name=NOS Social", "-c", "user.email=nos-social@users.noreply.github.com", "commit", "-m", msg)
     for _ in range(3):
         git("pull", "--rebase", "--depth", "1", "origin", "main")
         if git("push", "origin", "HEAD:main").returncode == 0:
@@ -120,6 +126,7 @@ def main():
     ap.add_argument("--date", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--push", action="store_true")
+    ap.add_argument("--used", default="", help="used-photo list from tools/used_photos.py; the picks are added to it")
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     month = a.date[:7]
@@ -139,7 +146,7 @@ def main():
             c = cands[n]
             rec = dict(option=i, source=c["source"], title=c.get("title", ""), page_url=c.get("page_url", ""),
                        credit=c.get("credit", ""), license=c.get("license", ""), disclaimer=bool(c.get("disclaimer")),
-                       unsplash_dl=c.get("unsplash_dl", ""))
+                       unsplash_dl=c.get("unsplash_dl", ""), key=c.get("key", ""))
             pv = os.path.join(a.out, f"{a.post}-{i}.jpg")
             data, err = None, None
             for u in [c["full_url"], *c.get("alt_full", []), c.get("preview_url")]:
@@ -172,6 +179,19 @@ def main():
         for r in recs:
             if r["url"] in hosted:
                 r["live"] = live(r["url"])
+    if a.used:
+        try:
+            used = json.load(open(a.used))
+        except Exception:
+            used = []
+        used = used.get("keys", []) if isinstance(used, dict) else used
+        for r in recs:
+            for k in (r.get("key"), r.get("page_url") if r.get("source") not in ("website", "mark") else ""):
+                if k and k not in used:
+                    used.append(k)
+            if r.get("source") == "website" and r.get("title"):
+                used.append("nos-title:" + r["title"])
+        json.dump(used, open(a.used, "w"), indent=0)
     print(json.dumps(recs, indent=1))
 
 

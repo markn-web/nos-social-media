@@ -31,7 +31,7 @@ import urllib.request
 from PIL import Image
 from pypdf import PdfReader, PdfWriter
 
-UA = "NOS-Social-Photo-Finder/1.0 (markn@nosmanufacturing.com)"
+UA = "NOS-Social-Photo-Finder/1.1 (+https://nosmanufacturing.com)"
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW = "https://raw.githubusercontent.com/markn-web/nos-social-media/main/"
 MAX_BYTES = 100 * 1024 * 1024  # LinkedIn and Buffer limit
@@ -80,7 +80,7 @@ def push(msg):
     git("add", "docs")
     if not git("status", "--porcelain", "docs").stdout.strip():
         return True
-    git("-c", "user.name=NOS Social", "-c", "user.email=markn@nosmanufacturing.com", "commit", "-m", msg)
+    git("-c", "user.name=NOS Social", "-c", "user.email=nos-social@users.noreply.github.com", "commit", "-m", msg)
     for _ in range(3):
         git("pull", "--rebase", "--depth", "1", "origin", "main")
         if git("push", "origin", "HEAD:main").returncode == 0:
